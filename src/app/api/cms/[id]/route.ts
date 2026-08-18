@@ -13,7 +13,7 @@ export async function GET(
       where: { id },
       include: {
         author: {
-          select: { id: true, firstName: true, name: true, email: true },
+          select: { id: true, firstName: true, name: true },
         },
       },
     });
@@ -98,7 +98,7 @@ export async function PUT(
       },
       include: {
         author: {
-          select: { id: true, firstName: true, name: true, email: true },
+          select: { id: true, firstName: true, name: true },
         },
       },
     });

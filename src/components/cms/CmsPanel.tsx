@@ -69,7 +69,6 @@ interface Content {
     id: string;
     firstName: string | null;
     name: string | null;
-    email: string;
   };
 }
 

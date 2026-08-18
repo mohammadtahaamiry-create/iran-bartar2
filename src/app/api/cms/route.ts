@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       take: limit,
       include: {
         author: {
-          select: { id: true, firstName: true, name: true, email: true },
+          select: { id: true, firstName: true, name: true },
         },
       },
     });
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
       },
       include: {
         author: {
-          select: { id: true, firstName: true, name: true, email: true },
+          select: { id: true, firstName: true, name: true },
         },
       },
     });
