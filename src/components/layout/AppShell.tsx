@@ -136,8 +136,8 @@ export function AppShell() {
             <div className="text-sm font-medium truncate">
               {user.firstName || user.name || 'کاربر'}
             </div>
-            <div className="text-xs text-muted-foreground truncate" dir="ltr">
-              {user.email}
+            <div className="text-xs text-muted-foreground truncate">
+              {user.role === 'admin' ? 'مدیر سایت' : 'کاربر'}
             </div>
           </div>
           {user.role === 'admin' && (
