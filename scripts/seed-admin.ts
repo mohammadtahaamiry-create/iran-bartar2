@@ -19,8 +19,8 @@ async function main() {
       where: { email },
       data: {
         role: 'admin',
-        firstName: existing.firstName || 'محمدتقا',
-        name: existing.name || 'محمدتقا',
+        firstName: existing.firstName || 'محمدطاها',
+        name: existing.name || 'محمدطاها',
         onboarded: true,
         passwordHash: hashPassword(ADMIN_PASSWORD),
       },
@@ -37,8 +37,8 @@ async function main() {
       data: {
         email,
         passwordHash: hashPassword(ADMIN_PASSWORD),
-        firstName: 'محمدتقا',
-        name: 'محمدتقا',
+        firstName: 'محمدطاها',
+        name: 'محمدطاها',
         role: 'admin',
         onboarded: true,
       },
