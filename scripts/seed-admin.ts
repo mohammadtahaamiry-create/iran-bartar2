@@ -8,7 +8,7 @@ import { db } from '../src/lib/db';
 import { hashPassword } from '../src/lib/auth';
 import { CONTENT_ADMIN_EMAIL } from '../src/lib/content-admin';
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'IranBehtar@1403';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'mohammadtaha';
 
 async function main() {
   const email = CONTENT_ADMIN_EMAIL;
