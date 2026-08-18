@@ -1,7 +1,7 @@
 // Client-safe pure helpers for content admin checks.
 // Keep this file free of any server-only imports (no 'next/headers', no 'db', etc.).
 
-export const CONTENT_ADMIN_EMAIL = 'mohammadtahaamiri@gmial.com';
+export const CONTENT_ADMIN_EMAIL = 'mohammadtahaamiri@gmail.com';
 
 export function isContentAdmin(user: {
   email?: string | null;

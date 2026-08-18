@@ -1,7 +1,7 @@
 // Seed the content admin account.
 // Usage: bun run /home/z/my-project/scripts/seed-admin.ts
 //
-// Creates (or updates) an admin user with email mohammadtahaamiri@gmial.com
+// Creates (or updates) an admin user with email mohammadtahaamiri@gmail.com
 // so they can add/edit/delete CMS content.
 
 import { db } from '../src/lib/db';
