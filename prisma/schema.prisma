@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  firstName      String?
+  passwordHash   String
+  role           String   @default("user") // user | admin
+  onboarded      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chatSessions   ChatSession[]
+  contents       Content[]
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String   @default("گفتگوی جدید")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  sessionId   String
+  role        String   // user | assistant
+  content     String
+  thinking    String?
+  createdAt   DateTime @default(now())
+
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model Content {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  body        String
+  excerpt     String?
+  category    String   @default("عمومی")
+  tags        String   @default("")
+  status      String   @default("draft") // draft | published
+  authorId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([category])
+}
