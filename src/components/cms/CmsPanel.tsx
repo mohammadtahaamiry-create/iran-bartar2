@@ -51,7 +51,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
-import { CONTENT_ADMIN_EMAIL, isContentAdmin } from '@/lib/content-admin';
+import { isContentAdmin } from '@/lib/content-admin';
 
 interface Content {
   id: string;
@@ -222,11 +222,7 @@ export function CmsPanel() {
           <div className="flex items-start gap-2 text-sm text-muted-foreground">
             <Shield className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
             <p>
-              تنها مدیر سایت با ایمیل{' '}
-              <code dir="ltr" className="px-1 py-0.5 rounded bg-muted-foreground/10">
-                {CONTENT_ADMIN_EMAIL}
-              </code>{' '}
-              می‌تواند محتوای جدید ایجاد یا محتوای موجود را ویرایش و حذف کند. شما
+              ایجاد، ویرایش و حذف محتوا تنها توسط مدیر سایت انجام می‌شود. شما
               می‌توانید محتوای منتشرشده را مشاهده کنید.
             </p>
           </div>

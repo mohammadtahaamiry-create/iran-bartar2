@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUser, isContentAdmin, CONTENT_ADMIN_EMAIL } from '@/lib/auth';
+import { getCurrentUser, isContentAdmin } from '@/lib/auth';
 
 // GET - fetch a single content by id
 export async function GET(
@@ -57,7 +57,7 @@ export async function PUT(
     if (!isContentAdmin(user)) {
       return NextResponse.json(
         {
-          error: `ویرایش محتوا فقط برای مدیر سایت با ایمیل ${CONTENT_ADMIN_EMAIL} مجاز است`,
+          error: 'ویرایش محتوا فقط برای مدیر سایت مجاز است',
         },
         { status: 403 }
       );
@@ -127,7 +127,7 @@ export async function DELETE(
     if (!isContentAdmin(user)) {
       return NextResponse.json(
         {
-          error: `حذف محتوا فقط برای مدیر سایت با ایمیل ${CONTENT_ADMIN_EMAIL} مجاز است`,
+          error: 'حذف محتوا فقط برای مدیر سایت مجاز است',
         },
         { status: 403 }
       );

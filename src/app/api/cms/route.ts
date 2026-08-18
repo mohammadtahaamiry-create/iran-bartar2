@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUser, isContentAdmin, CONTENT_ADMIN_EMAIL } from '@/lib/auth';
+import { getCurrentUser, isContentAdmin } from '@/lib/auth';
 
 function slugify(text: string): string {
   return (
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     if (!isContentAdmin(user)) {
       return NextResponse.json(
         {
-          error: `افزودن محتوا فقط برای مدیر سایت با ایمیل ${CONTENT_ADMIN_EMAIL} مجاز است`,
+          error: 'افزودن محتوا فقط برای مدیر سایت مجاز است',
         },
         { status: 403 }
       );
