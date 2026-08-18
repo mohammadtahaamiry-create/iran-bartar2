@@ -101,3 +101,18 @@ export async function requireUser() {
   }
   return user;
 }
+
+// Re-export client-safe helpers so server code can import from '@/lib/auth'.
+export {
+  CONTENT_ADMIN_EMAIL,
+  isContentAdmin,
+} from '@/lib/content-admin';
+import { isContentAdmin } from '@/lib/content-admin';
+
+export async function requireContentAdmin() {
+  const user = await getCurrentUser();
+  if (!isContentAdmin(user)) {
+    throw new Error('Forbidden: content admin only');
+  }
+  return user as NonNullable<typeof user>;
+}

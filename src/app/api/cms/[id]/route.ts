@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, isContentAdmin, CONTENT_ADMIN_EMAIL } from '@/lib/auth';
 
 // GET - fetch a single content by id
 export async function GET(
@@ -25,8 +25,7 @@ export async function GET(
     const user = await getCurrentUser();
     if (
       content.status !== 'published' &&
-      content.authorId !== user?.id &&
-      user?.role !== 'admin'
+      !isContentAdmin(user)
     ) {
       return NextResponse.json(
         { error: 'دسترسی غیرمجاز' },
@@ -41,7 +40,7 @@ export async function GET(
   }
 }
 
-// PUT - update content
+// PUT - update content (content admin only)
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -55,17 +54,20 @@ export async function PUT(
         { status: 401 }
       );
     }
+    if (!isContentAdmin(user)) {
+      return NextResponse.json(
+        {
+          error: `ویرایش محتوا فقط برای مدیر سایت با ایمیل ${CONTENT_ADMIN_EMAIL} مجاز است`,
+        },
+        { status: 403 }
+      );
+    }
 
     const existing = await db.content.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: 'محتوا یافت نشد' }, { status: 404 });
     }
-    if (existing.authorId !== user.id && user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'شما مجاز به ویرایش این محتوا نیستید' },
-        { status: 403 }
-      );
-    }
+    // Only the content admin can edit; no per-author override
 
     const body = await req.json();
     const { title, body: contentBody, excerpt, category, tags, status } = body as {
@@ -108,7 +110,7 @@ export async function PUT(
   }
 }
 
-// DELETE - remove content
+// DELETE - remove content (content admin only)
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -122,17 +124,20 @@ export async function DELETE(
         { status: 401 }
       );
     }
+    if (!isContentAdmin(user)) {
+      return NextResponse.json(
+        {
+          error: `حذف محتوا فقط برای مدیر سایت با ایمیل ${CONTENT_ADMIN_EMAIL} مجاز است`,
+        },
+        { status: 403 }
+      );
+    }
 
     const existing = await db.content.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: 'محتوا یافت نشد' }, { status: 404 });
     }
-    if (existing.authorId !== user.id && user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'شما مجاز به حذف این محتوا نیستید' },
-        { status: 403 }
-      );
-    }
+    // Only the content admin can delete
 
     await db.content.delete({ where: { id } });
     return NextResponse.json({ ok: true });

@@ -48,8 +48,10 @@ import {
   User as UserIcon,
   Loader2,
   BookOpen,
+  Shield,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { CONTENT_ADMIN_EMAIL, isContentAdmin } from '@/lib/content-admin';
 
 interface Content {
   id: string;
@@ -184,6 +186,8 @@ export function CmsPanel() {
     }
   };
 
+  const canManageContent = isContentAdmin(user);
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center justify-between p-4 border-b border-border/50 bg-card/30 flex-wrap gap-3">
@@ -194,20 +198,40 @@ export function CmsPanel() {
           <div>
             <h2 className="font-semibold text-lg">مدیریت محتوا</h2>
             <p className="text-xs text-muted-foreground">
-              ایجاد، ویرایش و انتشار مقالات و محتوا
+              {canManageContent
+                ? 'ایجاد، ویرایش و انتشار مقالات و محتوا'
+                : 'مشاهده مقالات و محتوای منتشرشده'}
             </p>
           </div>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setShowEditor(true);
-          }}
-        >
-          <Plus className="w-4 h-4 ml-1" />
-          محتوای جدید
-        </Button>
+        {canManageContent && (
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setShowEditor(true);
+            }}
+          >
+            <Plus className="w-4 h-4 ml-1" />
+            محتوای جدید
+          </Button>
+        )}
       </div>
+
+      {!canManageContent && (
+        <div className="p-4 border-b border-border/50 bg-muted/30">
+          <div className="flex items-start gap-2 text-sm text-muted-foreground">
+            <Shield className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+            <p>
+              تنها مدیر سایت با ایمیل{' '}
+              <code dir="ltr" className="px-1 py-0.5 rounded bg-muted-foreground/10">
+                {CONTENT_ADMIN_EMAIL}
+              </code>{' '}
+              می‌تواند محتوای جدید ایجاد یا محتوای موجود را ویرایش و حذف کند. شما
+              می‌توانید محتوای منتشرشده را مشاهده کنید.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="p-4 border-b border-border/50 flex flex-wrap gap-3 items-center bg-card/20">
@@ -263,27 +287,30 @@ export function CmsPanel() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <FileText className="w-12 h-12 text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground mb-1">
-                  هنوز محتوایی ثبت نشده است
+                  {canManageContent
+                    ? 'هنوز محتوایی ثبت نشده است'
+                    : 'هنوز محتوای منتشرشده‌ای وجود ندارد'}
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  اولین مقاله یا محتوای خود را ایجاد کنید
+                  {canManageContent
+                    ? 'اولین مقاله یا محتوای خود را ایجاد کنید'
+                    : 'بعداً دوباره بررسی کنید'}
                 </p>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setEditing(null);
-                    setShowEditor(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4 ml-1" />
-                  ایجاد محتوا
-                </Button>
+                {canManageContent && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setEditing(null);
+                      setShowEditor(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 ml-1" />
+                    ایجاد محتوا
+                  </Button>
+                )}
               </div>
             ) : (
               filtered.map((c, idx) => {
-                const isOwner = user?.id === c.authorId;
-                const isAdmin = user?.role === 'admin';
-                const canEdit = isOwner || isAdmin;
                 return (
                   <motion.div
                     key={c.id}
@@ -339,7 +366,7 @@ export function CmsPanel() {
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            {canEdit && (
+                            {canManageContent && (
                               <>
                                 <Button
                                   variant="ghost"

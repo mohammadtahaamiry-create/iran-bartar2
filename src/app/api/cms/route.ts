@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, isContentAdmin, CONTENT_ADMIN_EMAIL } from '@/lib/auth';
 
 function slugify(text: string): string {
   return (
@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
       where.status = 'published';
     } else if (status === 'mine' && user) {
       where.authorId = user.id;
-    } else if (status === 'all' && user?.role === 'admin') {
+    } else if (status === 'all' && isContentAdmin(user)) {
+      // Only the content admin sees drafts and all content
       // no filter
     } else {
       where.status = 'published';
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - create content (authenticated)
+// POST - create content (content admin only)
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -68,6 +69,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'برای ایجاد محتوا ابتدا وارد شوید' },
         { status: 401 }
+      );
+    }
+    if (!isContentAdmin(user)) {
+      return NextResponse.json(
+        {
+          error: `افزودن محتوا فقط برای مدیر سایت با ایمیل ${CONTENT_ADMIN_EMAIL} مجاز است`,
+        },
+        { status: 403 }
       );
     }
 
