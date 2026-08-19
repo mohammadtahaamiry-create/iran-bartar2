@@ -417,6 +417,15 @@ export function ChatPanel() {
             onChange={handleImageSelect}
             className="hidden"
           />
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={`پیام خود را بنویسید یا تصویری ارسال کنید، ${greeting}...`}
+            className="resize-none min-h-[52px] max-h-[200px] flex-1"
+            rows={1}
+            disabled={loading}
+          />
           <Button
             type="button"
             variant="ghost"
@@ -428,15 +437,6 @@ export function ChatPanel() {
           >
             <ImagePlus className="w-5 h-5" />
           </Button>
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`پیام خود را بنویسید یا تصویری ارسال کنید، ${greeting}...`}
-            className="resize-none min-h-[52px] max-h-[200px] flex-1"
-            rows={1}
-            disabled={loading}
-          />
           <Button
             onClick={send}
             disabled={(!input.trim() && !imageData) || loading}
