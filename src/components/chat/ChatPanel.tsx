@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,6 +18,8 @@ import {
   Trash2,
   ChevronDown,
   User,
+  ImagePlus,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 
@@ -25,9 +27,13 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  image?: string | null;
   thinking?: string | null;
   showThinking?: boolean;
 }
+
+const MAX_IMAGE_SIZE_MB = 10;
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 export function ChatPanel() {
   const { user } = useAuthStore();
@@ -36,6 +42,8 @@ export function ChatPanel() {
   const [deepThinking, setDeepThinking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [imageData, setImageData] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,17 +52,48 @@ export function ChatPanel() {
     }
   }, [messages, loading]);
 
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error('فرمت فایل پشتیبانی نمی‌شود. فقط JPG, PNG, GIF, WebP مجاز است.');
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      toast.error(`حجم تصویر نباید بیشتر از ${MAX_IMAGE_SIZE_MB} مگابایت باشد.`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageData(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  }, []);
+
+  const removeImage = useCallback(() => {
+    setImageData(null);
+  }, []);
+
   const send = async () => {
     const trimmed = input.trim();
-    if (!trimmed || loading) return;
+    if ((!trimmed && !imageData) || loading) return;
 
     const userMsg: Message = {
       id: `u-${Date.now()}`,
       role: 'user',
-      content: trimmed,
+      content: trimmed || 'تحلیل این تصویر',
+      image: imageData,
     };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
+    const currentImage = imageData;
+    setImageData(null);
     setLoading(true);
 
     try {
@@ -62,9 +101,10 @@ export function ChatPanel() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: trimmed,
+          message: trimmed || 'تحلیل این تصویر',
           sessionId,
           deepThinking,
+          image: currentImage,
         }),
       });
       const data = await res.json();
@@ -107,6 +147,7 @@ export function ChatPanel() {
   const clearChat = () => {
     setMessages([]);
     setSessionId(null);
+    setImageData(null);
   };
 
   const toggleThinking = (id: string) => {
@@ -153,9 +194,9 @@ export function ChatPanel() {
                   سلام {greeting}! 👋
                 </h3>
                 <p className="text-muted-foreground max-w-md mb-6">
-                  من دستیار هوشمند ایران برتر هستم. هر سؤالی دارید بپرسید؛ اگر
-                  حالت «تفکر عمیق» را فعال کنید، مسئله را مرحله‌به‌مرحله تحلیل
-                  می‌کنم و به نتیجه دقیق‌تری می‌رسم.
+                  من دستیار هوشمند ایران برتر هستم. هر سؤالی دارید بپرسید؛
+                  اگر حالت «تفکر عمیق» را فعال کنید، مسئله را مرحله‌به‌مرحله تحلیل
+                  می‌کنم. همچنین می‌توانید تصویر ارسال کنید تا آن را تحلیل کنم.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl w-full">
                   <SuggestionCard
@@ -167,11 +208,9 @@ export function ChatPanel() {
                     }}
                   />
                   <SuggestionCard
-                    title="نوشتن یک متن حرفه‌ای"
-                    desc="مقاله، ایمیل یا گزارش کاری"
-                    onClick={() => {
-                      setInput('یک ایمیل رسمی برای درخواست جلسه بنویس');
-                    }}
+                    title="تحلیل تصویر"
+                    desc="یک عکس ارسال کنید تا بررسی کنم"
+                    onClick={() => fileInputRef.current?.click()}
                   />
                   <SuggestionCard
                     title="یادگیری یک مفهوم"
@@ -219,6 +258,16 @@ export function ChatPanel() {
                       m.role === 'user' ? 'items-end' : 'items-start'
                     } flex flex-col gap-1`}
                   >
+                    {/* Image display in user message */}
+                    {m.image && (
+                      <div className={`rounded-2xl overflow-hidden border border-border/30 ${m.role === 'user' ? 'self-end' : 'self-start'}`}>
+                        <img
+                          src={m.image}
+                          alt="تصویر ارسالی"
+                          className="max-w-full max-h-[300px] object-contain bg-black/5"
+                        />
+                      </div>
+                    )}
                     <div
                       className={`rounded-2xl px-4 py-3 ${
                         m.role === 'user'
@@ -313,6 +362,7 @@ export function ChatPanel() {
 
       {/* Input */}
       <div className="border-t border-border/50 p-4 bg-card/30">
+        {/* Deep thinking toggle */}
         <div className="flex items-center gap-3 mb-2">
           <div className="flex items-center gap-2">
             <Switch
@@ -331,19 +381,65 @@ export function ChatPanel() {
             </Badge>
           )}
         </div>
+
+        {/* Image preview */}
+        <AnimatePresence>
+          {imageData && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="relative inline-block rounded-xl overflow-hidden border border-border/40">
+                <img
+                  src={imageData}
+                  alt="پیش‌نمایش"
+                  className="max-h-[160px] max-w-[240px] object-contain bg-black/5"
+                />
+                <button
+                  onClick={removeImage}
+                  className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Input row */}
         <div className="flex gap-2 items-end">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            ref={fileInputRef}
+            onChange={handleImageSelect}
+            className="hidden"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-[52px] w-[52px] shrink-0 text-muted-foreground hover:text-primary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            title="افزودن تصویر"
+          >
+            <ImagePlus className="w-5 h-5" />
+          </Button>
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`پیام خود را بنویسید، ${greeting}...`}
+            placeholder={`پیام خود را بنویسید یا تصویری ارسال کنید، ${greeting}...`}
             className="resize-none min-h-[52px] max-h-[200px] flex-1"
             rows={1}
             disabled={loading}
           />
           <Button
             onClick={send}
-            disabled={!input.trim() || loading}
+            disabled={(!input.trim() && !imageData) || loading}
             size="icon"
             className="h-[52px] w-[52px] shrink-0"
           >
