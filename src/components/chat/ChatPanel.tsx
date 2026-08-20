@@ -20,6 +20,10 @@ import {
   User,
   ImagePlus,
   X,
+  Mic,
+  MicOff,
+  Volume2,
+  Square,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 
@@ -43,6 +47,18 @@ export function ChatPanel() {
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [imageData, setImageData] = useState<string | null>(null);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // TTS state
+  const [playingMsgId, setPlayingMsgId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -51,6 +67,21 @@ export function ChatPanel() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, loading]);
+
+  // Cleanup recording on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
 
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -80,6 +111,164 @@ export function ChatPanel() {
     setImageData(null);
   }, []);
 
+  // ---- Voice Recording ----
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm',
+      });
+
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks
+        stream.getTracks().forEach((t) => t.stop());
+
+        if (audioChunksRef.current.length === 0) return;
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          if (!base64) {
+            toast.error('خطا در خواندن فایل صوتی');
+            return;
+          }
+
+          toast.loading('در حال تبدیل صدا به متن...');
+          try {
+            const res = await fetch('/api/chat/voice-to-text', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audioBase64: base64 }),
+            });
+            toast.dismiss();
+            const data = await res.json();
+            if (!res.ok) {
+              toast.error(data.error || 'خطا در تشخیص گفتار');
+              return;
+            }
+            if (data.text?.trim()) {
+              setInput((prev) => (prev ? prev + ' ' + data.text.trim() : data.text.trim()));
+              toast.success('گفتار تشخیص داده شد');
+            } else {
+              toast.error('متنی تشخیص داده نشد. لطفاً دوباره تلاش کنید.');
+            }
+          } catch {
+            toast.dismiss();
+            toast.error('خطا در ارتباط با سرور');
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((prev) => {
+          if (prev >= 120) {
+            // Auto-stop after 2 minutes
+            mediaRecorder.stop();
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch {
+      toast.error('دسترسی به میکروفون رد شد. لطفاً دسترسی بدهید.');
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setIsRecording(false);
+  }, []);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
+  // ---- TTS (Text to Speech) ----
+  const speakText = useCallback(async (msgId: string, text: string) => {
+    if (playingMsgId === msgId) {
+      // Stop playing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setPlayingMsgId(null);
+      return;
+    }
+
+    // Stop any previous audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    // Strip markdown for speech
+    const plainText = text
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      .replace(/[-*+]\s+/g, '')
+      .replace(/\n{2,}/g, ' ')
+      .trim();
+
+    if (!plainText) return;
+
+    setPlayingMsgId(msgId);
+    try {
+      const res = await fetch('/api/chat/text-to-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: plainText }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.audioUrl) {
+        toast.error('خطا در تولید صدا');
+        setPlayingMsgId(null);
+        return;
+      }
+
+      const audio = new Audio(data.audioUrl);
+      audioRef.current = audio;
+      audio.onended = () => setPlayingMsgId(null);
+      audio.onerror = () => {
+        toast.error('خطا در پخش صدا');
+        setPlayingMsgId(null);
+      };
+      audio.play();
+    } catch {
+      toast.error('خطا در تولید صدا');
+      setPlayingMsgId(null);
+    }
+  }, [playingMsgId]);
+
+  // ---- Send Message ----
   const send = async () => {
     const trimmed = input.trim();
     if ((!trimmed && !imageData) || loading) return;
@@ -148,12 +337,23 @@ export function ChatPanel() {
     setMessages([]);
     setSessionId(null);
     setImageData(null);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setPlayingMsgId(null);
   };
 
   const toggleThinking = (id: string) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, showThinking: !m.showThinking } : m))
     );
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const greeting = user?.firstName || user?.name || 'کاربر گرامی';
@@ -196,7 +396,7 @@ export function ChatPanel() {
                 <p className="text-muted-foreground max-w-md mb-6">
                   من دستیار هوشمند ایران برتر هستم. هر سؤالی دارید بپرسید؛
                   اگر حالت «تفکر عمیق» را فعال کنید، مسئله را مرحله‌به‌مرحله تحلیل
-                  می‌کنم. همچنین می‌توانید تصویر ارسال کنید تا آن را تحلیل کنم.
+                  می‌کنم. همچنین می‌توانید تصویر ارسال کنید یا با صدا صحبت کنید.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl w-full">
                   <SuggestionCard
@@ -213,17 +413,15 @@ export function ChatPanel() {
                     onClick={() => fileInputRef.current?.click()}
                   />
                   <SuggestionCard
+                    title="سؤال صوتی"
+                    desc="با میکروفون سؤال بپرسید"
+                    onClick={() => toggleRecording()}
+                  />
+                  <SuggestionCard
                     title="یادگیری یک مفهوم"
                     desc="با مثال و توضیح ساده"
                     onClick={() => {
                       setInput('مفهوم هوش مصنوعی را با مثال ساده توضیح بده');
-                    }}
-                  />
-                  <SuggestionCard
-                    title="برنامه‌ریزی و مشاوره"
-                    desc="برای کار، یادگیری یا زندگی"
-                    onClick={() => {
-                      setInput('یک برنامه مطالعه هفتگی برای من طراحی کن');
                     }}
                   />
                 </div>
@@ -285,6 +483,24 @@ export function ChatPanel() {
                         </p>
                       )}
                     </div>
+
+                    {/* Actions for assistant messages: TTS */}
+                    {m.role === 'assistant' && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <button
+                          onClick={() => speakText(m.id, m.content)}
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors ${
+                            playingMsgId === m.id
+                              ? 'bg-primary text-primary-foreground'
+                              : 'text-muted-foreground hover:text-primary hover:bg-muted/50'
+                          }`}
+                          title={playingMsgId === m.id ? 'توقف پخش' : 'پخش صدا'}
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                          {playingMsgId === m.id ? 'در حال پخش...' : 'پخش صدا'}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Thinking toggle */}
                     {m.thinking && (
@@ -408,6 +624,28 @@ export function ChatPanel() {
           )}
         </AnimatePresence>
 
+        {/* Recording indicator */}
+        <AnimatePresence>
+          {isRecording && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                </span>
+                <span className="text-sm text-red-400 font-medium">در حال ضبط صدا</span>
+                <span className="text-sm font-mono text-red-400" dir="ltr">{formatTime(recordingTime)}</span>
+                <span className="text-xs text-muted-foreground mr-auto">حداکثر ۲ دقیقه</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Input row */}
         <div className="flex gap-2 items-end">
           <input
@@ -421,11 +659,26 @@ export function ChatPanel() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`پیام خود را بنویسید یا تصویری ارسال کنید، ${greeting}...`}
+            placeholder={`پیام خود را بنویسید یا صحبت کنید، ${greeting}...`}
             className="resize-none min-h-[52px] max-h-[200px] flex-1"
             rows={1}
-            disabled={loading}
+            disabled={loading || isRecording}
           />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`h-[52px] w-[52px] shrink-0 ${
+              isRecording
+                ? 'text-red-500 hover:text-red-600 hover:bg-red-500/10'
+                : 'text-muted-foreground hover:text-primary'
+            }`}
+            onClick={toggleRecording}
+            disabled={loading}
+            title={isRecording ? 'توقف ضبط' : 'ضبط صدا'}
+          >
+            {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </Button>
           <Button
             type="button"
             variant="ghost"
