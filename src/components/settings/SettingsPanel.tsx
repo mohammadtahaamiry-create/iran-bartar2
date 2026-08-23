@@ -75,6 +75,7 @@ export function SettingsPanel() {
   const { user } = useAuthStore();
   const [data, setData] = useState<CategoriesData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -84,17 +85,22 @@ export function SettingsPanel() {
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/settings');
       const json = await res.json();
       if (!res.ok) {
-        toast.error(json.error || 'خطا در دریافت تنظیمات');
+        const msg = json.error || 'خطا در دریافت تنظیمات';
+        setError(msg);
+        toast.error(msg);
         return;
       }
       setData(json);
       setDraftValues({});
-    } catch {
-      toast.error('خطا در ارتباط با سرور');
+    } catch (err) {
+      const msg = 'خطا در ارتباط با سرور';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -183,11 +189,24 @@ export function SettingsPanel() {
     );
   }
 
-  if (loading || !data) {
+  if (loading) {
     return (
-      <div className="flex flex-col h-full items-center justify-center">
+      <div className="flex flex-col items-center justify-center p-8">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
         <p className="text-muted-foreground">در حال بارگذاری تنظیمات...</p>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <AlertCircle className="w-12 h-12 text-red-400/60 mb-3" />
+        <h2 className="text-lg font-semibold mb-2">خطا در بارگذاری تنظیمات</h2>
+        <p className="text-muted-foreground mb-4">{error || 'داده‌ای دریافت نشد'}</p>
+        <Button variant="outline" onClick={fetchSettings}>
+          تلاش مجدد
+        </Button>
       </div>
     );
   }
@@ -195,9 +214,9 @@ export function SettingsPanel() {
   const categories = data.categories;
 
   return (
-    <div className="flex flex-col h-full min-h-0 lg:flex-row">
+    <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
       {/* Sidebar - categories */}
-      <aside className="lg:w-64 shrink-0 border-l border-border/50 bg-card/30 lg:overflow-y-auto">
+      <aside className="lg:w-64 shrink-0 border-l border-border/50 bg-card/30 overflow-y-auto">
         <div className="p-4 border-b border-border/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center glow-primary">
@@ -333,8 +352,8 @@ export function SettingsPanel() {
         </AnimatePresence>
 
         {/* Settings list */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <ScrollArea className="h-full">
+        <div className="flex-1 min-h-0 overflow-hidden relative">
+          <ScrollArea className="absolute inset-0">
             <div className="p-4 space-y-3">
               {categories[activeCategory]?.items.map((item) => (
                 <SettingRow
