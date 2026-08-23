@@ -15,6 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
@@ -32,6 +37,7 @@ import {
   TestTube2,
   Shield,
   Database,
+  ChevronDown,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { isContentAdmin } from '@/lib/content-admin';
@@ -175,6 +181,39 @@ export function SettingsPanel() {
     setShowSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Quick-save a single model setting immediately
+  const [quickSaving, setQuickSaving] = useState<string | null>(null);
+  const handleQuickModelSave = async (key: string, value: string) => {
+    setQuickSaving(key);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: { [key]: value } }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || 'خطا در ذخیره مدل');
+        return;
+      }
+      toast.success('مدل ذخیره شد');
+      // Remove from draft if it was there, and refresh data
+      setDraftValues((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      await fetchSettings();
+    } catch {
+      toast.error('خطا در ارتباط با سرور');
+    } finally {
+      setQuickSaving(null);
+    }
+  };
+
+  // Model items from the models category
+  const modelItems = data?.categories?.['models']?.items || [];
+
   // ---- Render guards ----
   if (!isContentAdmin(user)) {
     return (
@@ -266,25 +305,51 @@ export function SettingsPanel() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {activeCategory === 'api_keys' && categories['models'] && (() => {
-              const chatModelItem = categories['models'].items.find(i => i.key === 'chat_model');
-              const currentModel = chatModelItem ? (draftValues['chat_model'] || chatModelItem.value || chatModelItem.defaultValue || '') : '';
-              return (
-                <Select value={currentModel} onValueChange={(v) => handleChange('chat_model', v)}>
-                  <SelectTrigger className="w-[180px] text-xs">
-                    <Cpu className="w-3.5 h-3.5 ml-1.5 text-muted-foreground" />
-                    <SelectValue placeholder="انتخاب مدل..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {chatModelItem?.options?.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        <code dir="ltr" className="text-xs">{opt}</code>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              );
-            })()}
+            {activeCategory === 'api_keys' && modelItems.length > 0 && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Cpu className="w-4 h-4" />
+                    انتخاب مدل
+                    <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-3" align="end">
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">مدل‌های هوش مصنوعی</p>
+                    {modelItems.map((item) => {
+                      const currentValue = item.value || item.defaultValue || '';
+                      return (
+                        <div key={item.key} className="space-y-1">
+                          <Label className="text-xs font-medium">{item.label}</Label>
+                          <div className="relative">
+                            <Select
+                              value={currentValue}
+                              onValueChange={(v) => handleQuickModelSave(item.key, v)}
+                              disabled={quickSaving === item.key}
+                            >
+                              <SelectTrigger className="w-full text-xs h-8">
+                                {quickSaving === item.key ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : null}
+                                <SelectValue placeholder="انتخاب..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {item.options?.map((opt) => (
+                                  <SelectItem key={opt} value={opt}>
+                                    <code dir="ltr" className="text-xs">{opt}</code>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             {activeCategory === 'api_keys' && (
               <Button
                 variant="outline"
