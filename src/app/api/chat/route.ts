@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import ZAI, { type VisionMessage, type VisionMultimodalContentItem } from 'z-ai-web-dev-sdk';
+import { createZai, getModel } from '@/lib/zai';
+import { type VisionMessage, type VisionMultimodalContentItem } from 'z-ai-web-dev-sdk';
 
 export const maxDuration = 120;
 
@@ -100,7 +101,8 @@ ${hasImage ? '۸) کاربر یک تصویر ارسال کرده است. آن ر
 - کاربر: ${userDisplayName}
 - وضعیت تفکر عمیق: ${deepThinking ? 'فعال' : 'غیرفعال'}`;
 
-    const zai = await ZAI.create();
+    const zai = await createZai();
+    const visionModel = (await getModel('vision')) || 'glm-4v-flash';
 
     // When there is an image, we must use createVision
     if (hasImage) {
@@ -138,7 +140,7 @@ ${messageText}
             buildVisionUserMessage('تحلیل عمیق خود را شروع کن.', image),
           ];
           const thinkingCompletion = await zai.chat.completions.createVision({
-            model: 'glm-4v-flash',
+            model: visionModel,
             messages: thinkingVisionMessages,
             thinking: { type: 'enabled' },
           });
@@ -151,7 +153,7 @@ ${messageText}
       }
 
       const completion = await zai.chat.completions.createVision({
-        model: 'glm-4v-flash',
+        model: visionModel,
         messages: visionMessages,
         thinking: { type: deepThinking ? 'enabled' : 'disabled' },
       });

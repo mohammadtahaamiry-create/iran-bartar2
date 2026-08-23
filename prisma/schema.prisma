@@ -67,3 +67,18 @@ model Content {
   @@index([status])
   @@index([category])
 }
+
+/// Application-level settings (admin only). Key/value store.
+/// Sensitive values (API keys, tokens) are stored encrypted with AES-256-GCM.
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  category    String   @default("general")
+  isSecret    Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@index([category])
+}

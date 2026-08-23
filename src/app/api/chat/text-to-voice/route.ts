@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import ZAI from 'z-ai-web-dev-sdk';
+import { createZai } from '@/lib/zai';
 
 export const maxDuration = 30;
 
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const zai = await ZAI.create();
+    const zai = await createZai();
 
     const result = await zai.audio.tts.create({
       input: text.trim().slice(0, 2000), // Limit to avoid long generation

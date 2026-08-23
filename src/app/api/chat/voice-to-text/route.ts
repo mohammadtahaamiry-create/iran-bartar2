@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import ZAI from 'z-ai-web-dev-sdk';
+import { createZai } from '@/lib/zai';
 import { execFile } from 'child_process';
 import { writeFile, unlink, readFile } from 'fs/promises';
 import path from 'path';
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     const wavBuffer = await readFile(wavPath);
     const wavBase64 = wavBuffer.toString('base64');
 
-    const zai = await ZAI.create();
+    const zai = await createZai();
     const result = await zai.audio.asr.create({
       file_base64: wavBase64,
     });

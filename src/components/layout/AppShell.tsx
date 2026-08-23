@@ -24,11 +24,13 @@ import { toast } from 'sonner';
 import { OverviewPanel } from '@/components/OverviewPanel';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { CmsPanel } from '@/components/cms/CmsPanel';
+import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { OnboardingModal } from '@/components/auth/OnboardingModal';
+import { isContentAdmin } from '@/lib/content-admin';
 
-type Tab = 'overview' | 'chat' | 'cms';
+type Tab = 'overview' | 'chat' | 'cms' | 'settings';
 
-const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode; desc: string }[] = [
+const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode; desc: string; adminOnly?: boolean }[] = [
   {
     id: 'overview',
     label: 'داشبورد',
@@ -46,6 +48,13 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode; desc: string }
     label: 'مدیریت محتوا',
     icon: <BookOpen className="w-5 h-5" />,
     desc: 'سامانه محتوا',
+  },
+  {
+    id: 'settings',
+    label: 'تنظیمات',
+    icon: <Settings className="w-5 h-5" />,
+    desc: 'پیکربندی اپلیکیشن',
+    adminOnly: true,
   },
 ];
 
@@ -93,7 +102,7 @@ export function AppShell() {
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => !item.adminOnly || isContentAdmin(user)).map((item) => (
           <button
             key={item.id}
             onClick={() => handleNavigate(item.id)}
