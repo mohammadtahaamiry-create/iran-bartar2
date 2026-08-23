@@ -207,6 +207,7 @@ ${messageText}
 
       try {
         const thinkingCompletion = await zai.chat.completions.create({
+          model: chatModel,
           messages: [
             { role: 'assistant', content: thinkingSystem },
             { role: 'user', content: 'تحلیل عمیق خود را شروع کن.' },
@@ -224,7 +225,10 @@ ${messageText}
       }
     }
 
+    const chatModel = (await getModel('chat')) || 'glm-4-flash';
+
     const completion = await zai.chat.completions.create({
+      model: chatModel,
       messages: aiMessages,
       thinking: { type: deepThinking ? 'enabled' : 'disabled' },
       temperature: deepThinking ? 0.3 : 0.7,
