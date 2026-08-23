@@ -212,6 +212,7 @@ export function AppShell() {
               {tab === 'overview' && <OverviewPanel onNavigate={handleNavigate} />}
               {tab === 'chat' && <ChatPanel />}
               {tab === 'cms' && <CmsPanel />}
+              {tab === 'settings' && <SettingsPanel />}
             </motion.div>
           </AnimatePresence>
         </main>
