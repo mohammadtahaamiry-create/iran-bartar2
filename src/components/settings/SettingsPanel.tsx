@@ -265,7 +265,26 @@ export function SettingsPanel() {
               {categories[activeCategory]?.items.length || 0} مورد پیکربندی
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {activeCategory === 'api_keys' && categories['models'] && (() => {
+              const chatModelItem = categories['models'].items.find(i => i.key === 'chat_model');
+              const currentModel = chatModelItem ? (draftValues['chat_model'] || chatModelItem.value || chatModelItem.defaultValue || '') : '';
+              return (
+                <Select value={currentModel} onValueChange={(v) => handleChange('chat_model', v)}>
+                  <SelectTrigger className="w-[180px] text-xs">
+                    <Cpu className="w-3.5 h-3.5 ml-1.5 text-muted-foreground" />
+                    <SelectValue placeholder="انتخاب مدل..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chatModelItem?.options?.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        <code dir="ltr" className="text-xs">{opt}</code>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              );
+            })()}
             {activeCategory === 'api_keys' && (
               <Button
                 variant="outline"
