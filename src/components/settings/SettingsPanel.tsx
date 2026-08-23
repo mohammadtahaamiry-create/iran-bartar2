@@ -196,8 +196,7 @@ export function SettingsPanel() {
         toast.error(json.error || 'خطا در ذخیره مدل');
         return;
       }
-      toast.success('مدل ذخیره شد');
-      // Remove from draft if it was there, and refresh data
+      toast.success('مدل فعال تغییر کرد');
       setDraftValues((prev) => {
         const next = { ...prev };
         delete next[key];
@@ -211,8 +210,31 @@ export function SettingsPanel() {
     }
   };
 
-  // Model items from the models category
-  const modelItems = data?.categories?.['models']?.items || [];
+  // Fetch models from API dynamically
+  const [apiModels, setApiModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
+
+  const fetchApiModels = async () => {
+    setFetchingModels(true);
+    try {
+      const res = await fetch('/api/settings/models', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.models) {
+        setApiModels(json.models);
+      } else {
+        toast.error(json.error || 'خطا در دریافت مدل‌ها');
+      }
+    } catch {
+      toast.error('خطا در ارتباط با سرور');
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  // Current chat model value
+  const chatModelItem = data?.categories?.['models']?.items.find((i) => i.key === 'chat_model');
+  const currentChatModel = chatModelItem?.value || chatModelItem?.defaultValue || '';
 
   // ---- Render guards ----
   if (!isContentAdmin(user)) {
@@ -305,8 +327,11 @@ export function SettingsPanel() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {activeCategory === 'api_keys' && modelItems.length > 0 && (
-              <Popover>
+            {activeCategory === 'api_keys' && (
+              <Popover open={modelPopoverOpen} onOpenChange={(open) => {
+                setModelPopoverOpen(open);
+                if (open && apiModels.length === 0) fetchApiModels();
+              }}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
                     <Cpu className="w-4 h-4" />
@@ -314,38 +339,58 @@ export function SettingsPanel() {
                     <ChevronDown className="w-3.5 h-3.5 opacity-60" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-72 p-3" align="end">
+                <PopoverContent className="w-80 p-3" align="end">
                   <div className="space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">مدل‌های هوش مصنوعی</p>
-                    {modelItems.map((item) => {
-                      const currentValue = item.value || item.defaultValue || '';
-                      return (
-                        <div key={item.key} className="space-y-1">
-                          <Label className="text-xs font-medium">{item.label}</Label>
-                          <div className="relative">
-                            <Select
-                              value={currentValue}
-                              onValueChange={(v) => handleQuickModelSave(item.key, v)}
-                              disabled={quickSaving === item.key}
-                            >
-                              <SelectTrigger className="w-full text-xs h-8">
-                                {quickSaving === item.key ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : null}
-                                <SelectValue placeholder="انتخاب..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {item.options?.map((opt) => (
-                                  <SelectItem key={opt} value={opt}>
-                                    <code dir="ltr" className="text-xs">{opt}</code>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">مدل فعال چت</p>
+                      {apiModels.length > 0 && (
+                        <button
+                          onClick={fetchApiModels}
+                          disabled={fetchingModels}
+                          className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                          {fetchingModels ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                          بروزرسانی
+                        </button>
+                      )}
+                    </div>
+                    {fetchingModels ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                        <span className="text-xs text-muted-foreground mr-2">در حال دریافت مدل‌ها...</span>
+                      </div>
+                    ) : apiModels.length > 0 ? (
+                      <Select
+                        value={currentChatModel}
+                        onValueChange={(v) => {
+                          handleQuickModelSave('chat_model', v);
+                          setModelPopoverOpen(false);
+                        }}
+                        disabled={quickSaving === 'chat_model'}
+                      >
+                        <SelectTrigger className="w-full text-sm">
+                          {quickSaving === 'chat_model' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          <SelectValue placeholder="انتخاب مدل..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {apiModels.map((model) => (
+                            <SelectItem key={model} value={model}>
+                              <code dir="ltr" className="text-xs">{model}</code>
+                              {model === currentChatModel && (
+                                <span className="mr-1.5 text-[10px] text-emerald-500">فعال</span>
+                              )}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-xs text-muted-foreground text-center py-4">
+                        مدل‌هایی یافت نشد. مطمئن شوید کلید API معتبر است.
+                      </p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">
+                      مدل‌ها مستقیماً از حساب API شما دریافت شده‌اند.
+                    </p>
                   </div>
                 </PopoverContent>
               </Popover>
