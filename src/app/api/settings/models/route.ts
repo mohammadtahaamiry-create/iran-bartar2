@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { isContentAdmin } from '@/lib/content-admin';
 import { getSetting } from '@/lib/settings';
-import { createZai } from '@/lib/zai';
+import { buildAiClient } from '@/lib/ai-client';
 
 export const maxDuration = 15;
 
-// POST — fetch available models from the Z.AI API using the configured key
+// POST — fetch available models from the API using the configured key
 export async function POST() {
   try {
     const user = await getCurrentUser();
@@ -20,7 +20,7 @@ export async function POST() {
       );
     }
 
-    const apiKey = await getSetting('zai_api_key');
+    const apiKey = await getSetting('ai_api_key');
     if (!apiKey) {
       return NextResponse.json(
         { error: 'کلید API تنظیم نشده است. ابتدا کلید را وارد و ذخیره کنید.' },
@@ -28,12 +28,11 @@ export async function POST() {
       );
     }
 
-    const zai = await createZai();
+    const { client } = await buildAiClient();
 
-    // Call the models list endpoint
-    const response = await zai.models.list();
+    // List models from the API (OpenRouter/OpenAI compatible)
+    const response = await client.models.list();
 
-    // Extract model IDs from the response
     let models: string[] = [];
     if (Array.isArray(response?.data)) {
       models = response.data

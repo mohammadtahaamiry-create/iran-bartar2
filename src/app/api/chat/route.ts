@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import { createZai, getModel } from '@/lib/zai';
-import { type VisionMessage, type VisionMultimodalContentItem } from 'z-ai-web-dev-sdk';
+import { buildAiClient, getModel } from '@/lib/ai-client';
+import type { ChatCompletionMessageParam } from 'openai/resources';
 
 export const maxDuration = 120;
 
@@ -11,20 +11,6 @@ interface ChatRequestBody {
   sessionId?: string;
   deepThinking?: boolean;
   image?: string | null; // base64 data URL
-}
-
-function buildVisionUserMessage(
-  text: string,
-  imageBase64?: string | null
-): VisionMessage {
-  if (!imageBase64) {
-    return { role: 'user', content: text };
-  }
-  const contentItems: VisionMultimodalContentItem[] = [
-    { type: 'text', text },
-    { type: 'image_url', image_url: { url: imageBase64 } },
-  ];
-  return { role: 'user', content: contentItems };
 }
 
 export async function POST(req: NextRequest) {
@@ -101,16 +87,25 @@ ${hasImage ? '۸) کاربر یک تصویر ارسال کرده است. آن ر
 - کاربر: ${userDisplayName}
 - وضعیت تفکر عمیق: ${deepThinking ? 'فعال' : 'غیرفعال'}`;
 
-    const zai = await createZai();
-    const visionModel = (await getModel('vision')) || 'glm-4v-flash';
+    const { client } = await buildAiClient();
+    const chatModel = (await getModel('chat')) || 'openai/gpt-4o-mini';
+    const visionModel = (await getModel('vision')) || 'openai/gpt-4o-mini';
 
-    // When there is an image, we must use createVision
+    // ---- Image path (vision) ----
     if (hasImage) {
-      // Build vision messages
-      const visionMessages: VisionMessage[] = [
-        { role: 'assistant', content: systemPrompt },
-        ...recentMessages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-        buildVisionUserMessage(messageText, image),
+      const visionMessages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: systemPrompt },
+        ...recentMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        } as ChatCompletionMessageParam)),
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: messageText },
+            { type: 'image_url', image_url: { url: image! } },
+          ],
+        },
       ];
 
       let thinkingContent = '';
@@ -135,14 +130,20 @@ ${messageText}
 خروجی را به صورت متن ساده فارسی و بدون Markdown بنویس.`;
 
         try {
-          const thinkingVisionMessages: VisionMessage[] = [
-            { role: 'assistant', content: thinkingSystem },
-            buildVisionUserMessage('تحلیل عمیق خود را شروع کن.', image),
-          ];
-          const thinkingCompletion = await zai.chat.completions.createVision({
+          const thinkingCompletion = await client.chat.completions.create({
             model: visionModel,
-            messages: thinkingVisionMessages,
-            thinking: { type: 'enabled' },
+            messages: [
+              { role: 'system', content: thinkingSystem },
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'تحلیل عمیق خود را شروع کن.' },
+                  { type: 'image_url', image_url: { url: image! } },
+                ],
+              },
+            ],
+            temperature: 0.3,
+            max_tokens: 2048,
           });
           thinkingContent =
             thinkingCompletion.choices?.[0]?.message?.content || '';
@@ -152,10 +153,11 @@ ${messageText}
         }
       }
 
-      const completion = await zai.chat.completions.createVision({
+      const completion = await client.chat.completions.create({
         model: visionModel,
         messages: visionMessages,
-        thinking: { type: deepThinking ? 'enabled' : 'disabled' },
+        temperature: deepThinking ? 0.3 : 0.7,
+        max_tokens: deepThinking ? 4096 : 2048,
       });
 
       const replyContent =
@@ -179,11 +181,14 @@ ${messageText}
       });
     }
 
-    // Text-only path (original logic)
-    const aiMessages = [
-      { role: 'assistant' as const, content: systemPrompt },
-      ...recentMessages,
-      { role: 'user' as const, content: messageText },
+    // ---- Text-only path ----
+    const aiMessages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      ...recentMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      } as ChatCompletionMessageParam)),
+      { role: 'user', content: messageText },
     ];
 
     let thinkingContent = '';
@@ -206,31 +211,26 @@ ${messageText}
 خروجی را به صورت متن ساده فارسی و بدون Markdown بنویس. این یک تحلیل داخلی است و کاربر آن را به‌عنوان «زنجیره تفکر» می‌بیند.`;
 
       try {
-        const thinkingCompletion = await zai.chat.completions.create({
+        const thinkingCompletion = await client.chat.completions.create({
           model: chatModel,
           messages: [
-            { role: 'assistant', content: thinkingSystem },
+            { role: 'system', content: thinkingSystem },
             { role: 'user', content: 'تحلیل عمیق خود را شروع کن.' },
           ],
-          thinking: { type: 'enabled' },
           temperature: 0.3,
           max_tokens: 2048,
         });
         thinkingContent =
           thinkingCompletion.choices?.[0]?.message?.content || '';
-        // Strip markdown headings if any
         thinkingContent = thinkingContent.replace(/^#+\s+/gm, '');
       } catch (err) {
         console.error('Thinking step error:', err);
       }
     }
 
-    const chatModel = (await getModel('chat')) || 'glm-4-flash';
-
-    const completion = await zai.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: chatModel,
       messages: aiMessages,
-      thinking: { type: deepThinking ? 'enabled' : 'disabled' },
       temperature: deepThinking ? 0.3 : 0.7,
       max_tokens: deepThinking ? 4096 : 2048,
     });

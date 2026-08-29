@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { createZai } from '@/lib/zai';
+import { buildAiClient, getModel } from '@/lib/ai-client';
 
 export const maxDuration = 30;
 
@@ -28,28 +28,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const zai = await createZai();
+    const { client } = await buildAiClient();
+    const ttsModel = (await getModel('tts')) || 'openai/tts-1';
 
-    const result = await zai.audio.tts.create({
-      input: text.trim().slice(0, 2000), // Limit to avoid long generation
+    const result = await client.audio.speech.create({
+      model: ttsModel,
+      input: text.trim().slice(0, 2000),
+      voice: 'alloy',
       response_format: 'mp3',
     });
 
-    // SDK returns base64 audio data
-    const audioData = result?.data || result?.audio || result?.base64 || '';
-
-    if (!audioData) {
-      console.error('TTS unexpected result:', JSON.stringify(result).slice(0, 500));
-      return NextResponse.json(
-        { error: 'خطا در تولید صدا' },
-        { status: 500 }
-      );
-    }
-
-    // If it's already a data URL, return as-is
-    const audioUrl = audioData.startsWith('data:')
-      ? audioData
-      : `data:audio/mp3;base64,${audioData}`;
+    // OpenAI SDK returns binary audio as a Response object with arrayBuffer()
+    const arrayBuffer = await (result as any).arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    const audioUrl = `data:audio/mp3;base64,${base64}`;
 
     return NextResponse.json({ audioUrl });
   } catch (err: any) {

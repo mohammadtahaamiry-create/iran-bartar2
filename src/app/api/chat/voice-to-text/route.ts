@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { createZai } from '@/lib/zai';
+import { buildAiClient, getModel } from '@/lib/ai-client';
 import { execFile } from 'child_process';
 import { writeFile, unlink, readFile } from 'fs/promises';
 import path from 'path';
@@ -66,28 +66,23 @@ export async function POST(req: NextRequest) {
     // Convert to 16kHz mono WAV (best for ASR)
     await convertToWav(inputPath, wavPath);
 
-    // Read the WAV file as base64
-    const wavBuffer = await readFile(wavPath);
-    const wavBase64 = wavBuffer.toString('base64');
+    // Use OpenAI-compatible Whisper transcription endpoint
+    const { client } = await buildAiClient();
+    const asrModel = (await getModel('asr')) || 'openai/whisper-1';
 
-    const zai = await createZai();
-    const result = await zai.audio.asr.create({
-      file_base64: wavBase64,
+    // Read the WAV file as a File-like object
+    const wavBuffer = await readFile(wavPath);
+    const file = new File([wavBuffer], 'audio.wav', { type: 'audio/wav' });
+
+    const result = await client.audio.transcriptions.create({
+      model: asrModel,
+      file,
+      language: 'fa', // Persian
     });
 
-    // Log full result for debugging
-    console.log('ASR raw result:', JSON.stringify(result).slice(0, 1000));
-
-    // Extract text from response - handle various possible structures
-    const text =
-      result?.text ||
-      result?.result ||
-      result?.data?.text ||
-      result?.data?.result ||
-      (typeof result === 'string' ? result : '');
+    const text = (result as any)?.text || '';
 
     if (!text || typeof text !== 'string' || !text.trim()) {
-      console.error('ASR empty/unexpected result:', JSON.stringify(result).slice(0, 500));
       return NextResponse.json(
         { error: 'خطا در تشخیص گفتار. لطفاً واضح‌تر صحبت کنید.' },
         { status: 500 }

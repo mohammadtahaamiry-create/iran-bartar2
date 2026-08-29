@@ -53,36 +53,59 @@ export interface SettingMeta {
 }
 
 export const SETTINGS_CATALOG: SettingMeta[] = [
-  // ---- API Keys ----
+  // ---- API Configuration ----
   {
-    key: 'zai_api_key',
-    label: 'کلید API هوش مصنوعی (Z.AI)',
-    description: 'کلید دسترسی به سرویس‌های Z.AI برای چت، تشخیص تصویر، تبدیل صدا به متن و متن به صدا.',
+    key: 'ai_provider',
+    label: 'سرویس‌دهنده API',
+    description: 'سرویس‌دهنده هوش مصنوعی که کلید API به آن تعلق دارد.',
+    category: 'api_keys',
+    isSecret: false,
+    type: 'select',
+    options: ['openrouter', 'openai', 'zai', 'custom'],
+    defaultValue: 'openrouter',
+  },
+  {
+    key: 'ai_api_key',
+    label: 'کلید API',
+    description: 'کلید دسترسی به سرویس هوش مصنوعی (OpenRouter, OpenAI, Z.AI یا هر سرویس سازگار).',
     category: 'api_keys',
     isSecret: true,
     type: 'password',
-    placeholder: 'کلید API را اینجا وارد کنید',
+    placeholder: 'sk-or-v1-... یا sk-...',
   },
   {
-    key: 'zai_base_url',
+    key: 'ai_base_url',
     label: 'آدرس پایه API (Base URL)',
-    description: 'آدرس پایه سرویس Z.AI. معمولاً نیازی به تغییر نیست.',
+    description: 'آدرس پایه سرویس. برای OpenRouter: https://openrouter.ai/api/v1',
     category: 'api_keys',
     isSecret: false,
     type: 'text',
-    defaultValue: 'https://api.z.ai/api/paas/v4',
-    placeholder: 'https://api.z.ai/api/paas/v4',
+    defaultValue: 'https://openrouter.ai/api/v1',
+    placeholder: 'https://openrouter.ai/api/v1',
   },
   // ---- Model Configuration ----
   {
     key: 'chat_model',
     label: 'مدل چت متنی',
-    description: 'مدل استفاده‌شده برای پاسخ به سؤالات متنی.',
+    description: 'مدل استفاده‌شده برای پاسخ به سؤالات متنی. برای OpenRouter می‌توانید از مدل‌های متنوعی استفاده کنید.',
     category: 'models',
     isSecret: false,
     type: 'select',
-    options: ['glm-4-flash', 'glm-4.5', 'glm-4.5-air', 'glm-4-plus', 'glm-4-air'],
-    defaultValue: 'glm-4-flash',
+    options: [
+      'openai/gpt-4o',
+      'openai/gpt-4o-mini',
+      'openai/gpt-4-turbo',
+      'anthropic/claude-3.5-sonnet',
+      'anthropic/claude-3.5-haiku',
+      'google/gemini-flash-1.5',
+      'google/gemini-pro-1.5',
+      'meta-llama/llama-3.3-70b-instruct',
+      'meta-llama/llama-3.1-8b-instruct',
+      'mistralai/mistral-large',
+      'qwen/qwen-2.5-72b-instruct',
+      'deepseek/deepseek-chat',
+    ],
+    defaultValue: 'openai/gpt-4o-mini',
   },
   {
     key: 'vision_model',
@@ -91,8 +114,16 @@ export const SETTINGS_CATALOG: SettingMeta[] = [
     category: 'models',
     isSecret: false,
     type: 'select',
-    options: ['glm-4v-flash', 'glm-4v-plus', 'glm-4v'],
-    defaultValue: 'glm-4v-flash',
+    options: [
+      'openai/gpt-4o',
+      'openai/gpt-4o-mini',
+      'openai/gpt-4-turbo',
+      'anthropic/claude-3.5-sonnet',
+      'google/gemini-flash-1.5',
+      'google/gemini-pro-1.5',
+      'meta-llama/llama-3.2-90b-vision-instruct',
+    ],
+    defaultValue: 'openai/gpt-4o-mini',
   },
   {
     key: 'asr_model',
@@ -101,8 +132,11 @@ export const SETTINGS_CATALOG: SettingMeta[] = [
     category: 'models',
     isSecret: false,
     type: 'select',
-    options: ['glm-asr-base', 'glm-asr-plus'],
-    defaultValue: 'glm-asr-base',
+    options: [
+      'openai/whisper-large-v3',
+      'openai/whisper-1',
+    ],
+    defaultValue: 'openai/whisper-1',
   },
   {
     key: 'tts_model',
@@ -111,8 +145,11 @@ export const SETTINGS_CATALOG: SettingMeta[] = [
     category: 'models',
     isSecret: false,
     type: 'select',
-    options: ['glm-tts', 'csm-tts'],
-    defaultValue: 'glm-tts',
+    options: [
+      'openai/tts-1',
+      'openai/tts-1-hd',
+    ],
+    defaultValue: 'openai/tts-1',
   },
   // ---- Features ----
   {
