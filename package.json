@@ -11,7 +11,11 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "docker:build": "docker build -t iran-behtar:latest .",
+    "docker:run": "docker run --rm -p 3000:3000 --env-file .env -v $(pwd)/data:/app/data iran-behtar:latest",
+    "cf:deploy": "wrangler containers deploy iran-behtar:latest",
+    "cf:logs": "wrangler containers logs iran-behtar"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -1,0 +1,45 @@
+# Cloudflare Containers configuration for Iran Behtar app
+# Docs: https://developers.cloudflare.com/containers/
+
+name = "iran-behtar"
+
+# The Docker image to deploy. Built from the project's Dockerfile.
+image = "iran-behtar:latest"
+
+# Application profile — runs as a long-running HTTP service.
+[application]
+name = "iran-behtar"
+# Long-running server (not a cron or worker)
+type = "server"
+
+# Traffic configuration
+[application.traffic]
+port = 3000
+# Public Internet-facing endpoint
+public = true
+
+# Rolling update strategy
+[application.traffic.strategy]
+type = "rolling"
+health_check_path = "/"
+health_check_port = 3000
+health_check_interval_seconds = 30
+
+# Resource limits
+[application.resources]
+cpu = 1              # vCPUs
+memory = "1Gi"       # memory limit
+# Optional: GPU not needed for this app
+
+# Environment variables (non-secret). Secrets are set via `wrangler` CLI.
+[application.env]
+NODE_ENV = "production"
+DATABASE_URL = "file:/app/data/custom.db"
+SETTINGS_ENCRYPTION_KEY = "set-via-wrangler-secret-not-here"
+# Add more env vars as needed
+
+# Persistent volume for the SQLite database
+[[application.volumes]]
+name = "iran-behtar-db"
+mount_path = "/app/data"
+size = "1Gi"

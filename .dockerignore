@@ -1,0 +1,59 @@
+# Build artifacts
+.next/
+.next/standalone/
+out/
+build/
+dist/
+
+# Dependencies
+node_modules/
+
+# Environment files (keep .env.example tracked)
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Database
+db/*.db
+db/*.db-journal
+data/
+
+# Logs
+*.log
+logs/
+dev.log
+server.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.cache/
+.turbo/
+.eslintcache
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Deploy scripts (already copied by build)
+deploy/
+ecosystem.config.cjs
+
+# Tests / docs
+README.md
+docs/
+
+# Cloudflare
+wrangler.toml
+wrangler.jsonc
+.dev.vars
