@@ -1,0 +1,31 @@
+# Node.js server configuration for Iran Behtar app
+# Copy this file to: /etc/systemd/system/iran-behtar.service
+# Then run:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable iran-behtar
+#   sudo systemctl start iran-behtar
+#   sudo systemctl status iran-behtar
+
+[Unit]
+Description=Iran Behtar AI App (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/iran-behtar
+EnvironmentFile=/var/www/iran-behtar/.env
+ExecStart=/usr/bin/node .next/standalone/server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=iran-behtar
+
+# Optional resource limits
+MemoryMax=1G
+CPUWeight=100
+
+[Install]
+WantedBy=multi-user.target
