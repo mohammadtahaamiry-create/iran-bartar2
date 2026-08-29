@@ -29,10 +29,11 @@ export async function buildAiClient(): Promise<{ client: OpenAI; baseUrl: string
   const client = new OpenAI({
     apiKey,
     baseURL: url,
-    // OpenRouter requires these headers for proper routing
+    // OpenRouter requires these headers for proper routing.
+    // NOTE: HTTP headers must be ASCII — Persian/Unicode chars are rejected.
     defaultHeaders: {
       'HTTP-Referer': 'https://iran-behtar.app',
-      'X-Title': 'ایران برتر',
+      'X-Title': 'Iran Behtar AI Assistant',
     },
   });
 
