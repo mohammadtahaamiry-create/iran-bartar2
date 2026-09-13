@@ -1,21 +1,38 @@
-# Multi-stage Dockerfile for Iran Behtar app (Node.js standard build)
-# Deploys via: npm install && npm run build && npm start
+# =============================================================================
+# Dockerfile — ایران برتر (Iran Behtar)
+# -----------------------------------------------------------------------------
+# Multi-stage build. NO secrets are baked into the image:
+#   - .env is never COPYed into the image (see .dockerignore)
+#   - All secret env vars (DATABASE_URL, SETTINGS_ENCRYPTION_KEY, NEXTAUTH_SECRET,
+#     OPENROUTER API keys, ...) are injected at RUNTIME via --env-file or docker-compose
+#   - SQLite database lives on a named/host volume at /app/data (persists across
+#     rebuilds & redeployments)
+#
+# Build:    docker build -t iran-behtar:latest .
+# Run:     docker run -d --name iran-behtar -p 3000:3000 \
+#            --env-file .env.production \
+#            -v iran_behtar_data:/app/data \
+#            iran-behtar:latest
+# Update:  docker build -t iran-behtar:latest . && docker rm -f iran-behtar && docker run -d ...
+#          (the volume keeps your database safe)
+# =============================================================================
 
-# ---- Stage 1: deps ----
+# ---- Stage 1: deps (cache node_modules) ----
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
 # Install ffmpeg (needed for voice-to-text conversion)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package manifests and prisma schema
+# Copy only manifests + prisma schema for deterministic installs
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 
-# Install dependencies
-RUN npm ci || npm install
+# Install ALL deps (including devDeps — needed for build)
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # ---- Stage 2: builder ----
 FROM node:20-bookworm-slim AS builder
@@ -23,43 +40,56 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Environment variables for the build
+# Build-time only — these are NOT real secrets, just placeholders so Next can build.
+# Real secrets are injected at runtime via env-file.
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL="file:/tmp/build.db"
+ENV DATABASE_URL="file:/tmp/build-only.db"
+ENV SETTINGS_ENCRYPTION_KEY="build-time-placeholder-not-used-at-runtime"
+ENV NEXTAUTH_SECRET="build-time-placeholder"
 
-# Build the Next.js app (standard output, not standalone)
+# Generate Prisma client + build Next.js
 RUN npx prisma generate
 RUN npm run build
 
-# ---- Stage 3: runner ----
+# Remove devDependencies (production-only node_modules)
+RUN npm prune --omit=dev
+
+# ---- Stage 3: runtime ----
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
-# Install ffmpeg in runtime (needed for ASR route)
+# Runtime system deps: ffmpeg for ASR, wget/curl for healthcheck, dumb-init for signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    ca-certificates \
+    wget \
+    dumb-init \
     && rm -rf /var/lib/apt/lists/*
 
-# Set production environment
+# Production environment — runtime secrets MUST come from env-file at `docker run`
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# IMPORTANT: DATABASE_URL points to the volume mount; the actual value is overridden
+# at runtime by the env-file to ensure data persistence.
 ENV DATABASE_URL="file:/app/data/custom.db"
 
-# Create a non-root user for security
+# Non-root user for security
 RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs
+    && adduser --system --uid 1001 --ingroup nodejs nextjs
 
-# Create the database directory with proper permissions
-RUN mkdir -p /app/data && chown -R nextjs:nodejs /app
+# Persistent data directory (mounted as a volume at runtime)
+RUN mkdir -p /app/data \
+    && chown -R nextjs:nodejs /app
 
-# Copy built app and dependencies
+# Copy only what we need from the builder stage
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
@@ -67,15 +97,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 
-# Switch to non-root user
+# Copy the entrypoint script (runs prisma migrations before starting Next.js)
+COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 USER nextjs
 
-# Expose port
 EXPOSE 3000
 
-# Healthcheck
+# Healthcheck: HTTP GET on /
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/', (r) => process.exit(r.statusCode < 500 ? 0 : 1))" || exit 1
+    CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Start the server using npm start
-CMD ["npm", "start"]
+# Use dumb-init to properly handle SIGTERM for graceful shutdown
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["/app/docker-entrypoint.sh"]

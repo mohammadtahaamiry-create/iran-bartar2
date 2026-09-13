@@ -68,9 +68,32 @@ NODE_ENV=production
 
 برای دیپلوی با Docker یا Cloudflare Containers، فایل [CLOUDFLARE.md](./CLOUDFLARE.md) را بخوانید.
 
+## دیپلوی با Docker روی سرور DirectAdmin
+
+اگر سرور شما کنترل‌پنل **DirectAdmin** دارد (که پورت‌های ۸۰ و ۴۴۳ را اشغال کرده)، راهنمای کامل در فایل [deploy/DOCKER-DIRECTADMIN.md](./deploy/DOCKER-DIRECTADMIN.md) است. به‌طور خلاصه:
+
+```bash
+# ۱) ساخت فایل env با مقادیر واقعی
+cp .env.example .env.production
+nano .env.production  # دو کلید تصادفی: openssl rand -base64 48
+chmod 600 .env.production
+
+# ۲) ساخت و اجرای کانتینر (دیتابیس روی volume پایدار)
+docker compose up -d --build
+
+# ۳) آپدیت بدون از دست رفتن داده‌ها
+git pull && docker compose up -d --build --force-recreate
+```
+
+ویژگی‌های کلیدی این پیکربندی:
+- **هیچ رازی داخل image نیست** — `.env.production` فقط روی سرور است و توسط `.dockerignore` از build context حذف می‌شود.
+- **دیتابیس روی volume** (`iran_behtar_data`) — بین rebuildها و restartها حفظ می‌شود.
+- **پورت ۳۰۰۰ به `127.0.0.1` بایند شده** — فقط Reverse Proxy دایرکت‌ادمین از بیرون به آن دسترسی دارد.
+- **Entrypoint به‌طور خودکار `prisma db push`** را قبل از شروع سرور اجرا می‌کند.
+
 ## دیپلوی روی VPS با PM2/systemd
 
-برای دیپلوی روی سرور Node.js، فایل [deploy/README.md](./deploy/README.md) را بخوانید.
+برای دیپلوی روی سرور Node.js (بدون Docker)، فایل [deploy/README.md](./deploy/README.md) را بخوانید.
 
 ## ساختار پروژه
 

@@ -1,59 +1,97 @@
-# Build artifacts
+# =============================================================================
+# .dockerignore — ensures NOTHING sensitive enters the Docker build context.
+# Lines below exclude env files, secrets, databases, logs, build artifacts.
+# The image is fully "stateless" — secrets & data are injected at runtime.
+# =============================================================================
+
+# ---- Secrets & env files (CRITICAL — never baked into image) ----
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+secrets/**
+credentials*
+*.secret
+
+# ---- Database files (must live on a volume, NOT in the image) ----
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+db/
+data/
+prisma/*.db
+prisma/*.db-*
+prisma/data/
+
+# ---- Build artifacts ----
 .next/
 .next/standalone/
 out/
 build/
 dist/
-
-# Dependencies
-node_modules/
-
-# Environment files (keep .env.example tracked)
-.env
-.env.local
-.env.production
-.env.*.local
-
-# Database
-db/*.db
-db/*.db-journal
-data/
-
-# Logs
-*.log
-logs/
-dev.log
-server.log
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Editor
-.vscode/
-.idea/
-*.swp
 .cache/
 .turbo/
 .eslintcache
 
-# Git
+# ---- Dependencies ----
+node_modules/
+
+# ---- Logs ----
+*.log
+logs/
+dev.log
+server.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Git ----
 .git/
 .gitignore
+.gitattributes
 
-# Docker
+# ---- Docker meta (don't ship Docker inside Docker) ----
 Dockerfile
 .dockerignore
+docker-compose*.yml
+docker-compose*.yaml
 
-# Deploy scripts (already copied by build)
+# ---- Deploy artifacts (server uses DirectAdmin reverse proxy, not these) ----
 deploy/
 ecosystem.config.cjs
-
-# Tests / docs
-README.md
-docs/
-
-# Cloudflare
+Caddyfile
 wrangler.toml
 wrangler.jsonc
-.dev.vars
+
+# ---- Docs / tests / scripts that aren't needed in production image ----
+README.md
+CLOUDFLARE.md
+docs/
+tests/
+scripts/seed-admin.ts
+scripts/migrate-admin-email.ts
+scripts/update-admin-name.ts
+scripts/*.png
+
+# ---- Misc ----
+coverage/
+.nyc_output/
+*.md.bak
+download/
+worklog.md

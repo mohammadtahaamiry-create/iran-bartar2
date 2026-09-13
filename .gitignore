@@ -11,10 +11,29 @@ node_modules/
 .env
 .env.local
 .env.production
+.env.*.local
+.dev.vars
 
 # Database
 db/*.db
 db/*.db-journal
+prisma/*.db
+prisma/*.db-journal
+*.sqlite
+*.sqlite-*
+data/
+
+# Backups (created by `npm run docker:backup`)
+backups/
+*.tar.gz
+
+# Secrets
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
 
 # Logs
 *.log

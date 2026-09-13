@@ -1,0 +1,81 @@
+# =============================================================================
+# docker-compose.yml — ایران برتر (Iran Behtar) production deployment
+# -----------------------------------------------------------------------------
+# Usage on DirectAdmin VPS (ports 80/443 are taken by DirectAdmin):
+#
+#   1. Copy project to the server
+#   2. Create .env.production with REAL secrets (see .env.example)
+#   3. docker compose up -d --build
+#   4. Configure a reverse proxy in DirectAdmin pointing to http://127.0.0.1:3000
+#      (see deploy/DOCKER-DIRECTADMIN.md for step-by-step guide)
+#
+# Updating (data survives):
+#   git pull && docker compose up -d --build
+#   The "iran_behtar_data" volume keeps your SQLite database across rebuilds.
+# =============================================================================
+
+services:
+  iran-behtar:
+    container_name: iran-behtar
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iran-behtar:latest
+    restart: unless-stopped
+
+    # DirectAdmin already occupies 80 & 443. Bind to localhost only so DirectAdmin
+    # (or another reverse proxy on the host) can reach it, but it's NOT exposed
+    # to the public internet directly. Use "3000:3000" if you don't have a proxy.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    # All secrets come from this file — NEVER bake them into the image.
+    env_file:
+      - .env.production
+
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - DATABASE_URL=file:/app/data/custom.db
+
+    # Named volume — survives `docker compose down`, `docker compose build`,
+    # image deletions, and server reboots.
+    volumes:
+      - iran_behtar_data:/app/data
+
+    # Graceful shutdown: SIGTERM → Next.js closes connections → exit
+    stop_grace_period: 30s
+    stop_signal: SIGTERM
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Hardening: read-only root FS, explicit tmpfs for writable dirs
+    # NOTE: read_only=true would break Next.js image cache, so we keep it writable
+    # but use security_opt + cap_drop for defense in depth.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+
+    # Logging: prevent log explosion on the host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  iran_behtar_data:
+    name: iran_behtar_data
+    driver: local
