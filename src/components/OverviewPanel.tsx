@@ -57,7 +57,7 @@ export function OverviewPanel({ onNavigate }: Props) {
             icon={<Sparkles className="w-5 h-5" />}
             label="تفکر عمیق"
             value="فعال"
-            color="from-amber-500 to-orange-500"
+            color="from-cyan-500 to-teal-500"
           />
           <StatCard
             icon={<Shield className="w-5 h-5" />}
