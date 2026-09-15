@@ -58,3 +58,8 @@ out/
 .cache/
 .turbo/
 .eslintcache
+
+# Sandbox internal files (not needed in user repo)
+.zscripts/
+worklog.md
+download/
