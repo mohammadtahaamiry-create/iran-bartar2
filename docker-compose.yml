@@ -37,7 +37,13 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+      # Force the DB path onto the persistent volume regardless of env-file content:
       - DATABASE_URL=file:/app/data/custom.db
+      # Admin bootstrap (first deploy). Values come from .env.production;
+      # these entries just document that they are consumed by the entrypoint.
+      # Remove the two lines below after first login if you prefer.
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
 
     # Named volume — survives `docker compose down`, `docker compose build`,
     # image deletions, and server reboots.

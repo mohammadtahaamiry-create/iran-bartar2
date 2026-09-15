@@ -72,5 +72,10 @@ p.\$queryRaw\`SELECT 1 AS ok\`
   .catch((e) => { console.error('    DB connection FAILED:', e.message); process.exit(1); });
 "
 
+echo "==> [entrypoint] Bootstrapping admin user (if ADMIN_EMAIL is set)..."
+node /app/docker/bootstrap-admin.cjs || {
+  echo "!!! [entrypoint] Admin bootstrap failed (non-fatal — you can create the user manually)."
+}
+
 echo "==> [entrypoint] Starting Next.js server on port ${PORT:-3000}..."
 exec npm start

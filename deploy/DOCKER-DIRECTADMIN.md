@@ -65,7 +65,11 @@ NEXTAUTH_SECRET=YOUR_RANDOM_SECRET_FROM_OPENSSL
 NEXTAUTH_URL=https://app.yourdomain.com
 NODE_ENV=production
 PORT=3000
+ADMIN_EMAIL=mohammadtahaamiri@gmail.com
+ADMIN_PASSWORD=YOUR_STRONG_PASSWORD_MIN_8_CHARS
 ```
+
+> **نکته:** `ADMIN_EMAIL` و `ADMIN_PASSWORD` در اولین اجرا به‌طور خودکار حساب ادمین را می‌سازند تا بتوانید بلافاصله وارد شوید و کلید OpenRouter را تنظیم کنید. این مقادیر در هر ری‌استارت با env همگام می‌مانند (idempotent).
 
 > **هشدار امنیتی:** فایل `.env.production` حاوی رازهای اصلی است. مطمئن شوید:
 > - در `.gitignore` هست (هست — چک کنید)
@@ -216,7 +220,13 @@ docker compose up -d --build --force-recreate
 docker compose logs -f
 ```
 
-**مهم:** دستور `prisma db push` در `docker-entrypoint.sh` به‌صورت خودکار در شروع کانتینر اجرا می‌شود و اگر schema تغییر کرده باشد، آن را به‌صورت non-destructive اعمال می‌کند. داده‌های موجود دست‌نخورده باقی می‌مانند (مگر اینکه یک فیلد را حذف کرده باشید — در آن صورت فقط داده‌ی همان فیلد از بین می‌رود).
+**مهم:** اسکریپت `docker-entrypoint.sh` در هر شروع کانتینر به‌طور خودکار:
+1. `prisma migrate deploy` را اجرا می‌کند — فقط migration فایل‌های کامیت‌شده را اعمال می‌کند و **هرگز داده حذف نمی‌کند**
+2. اتصال دیتابیس را تست می‌کند (smoke test)
+3. اگر `ADMIN_EMAIL` و `ADMIN_PASSWORD` در `.env.production` باشند، حساب ادمین را می‌سازد یا همگام می‌کند (idempotent)
+4. سپس سرور Next.js را اجرا می‌کند
+
+اگر schema جدیدی در کد push شده باشد ولی migration فایل نداشته باشید، `prisma db push` در حالت safe اجرا می‌شود (بدون `--accept-data-loss`) — تغییرات تخریبی با خطای واضح متوقف می‌شوند.
 
 ---
 

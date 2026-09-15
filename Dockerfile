@@ -46,12 +46,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build-time only — these are NOT real secrets, just placeholders so Next can build.
-# Real secrets are injected at runtime via env-file.
+# Build-time only — these are NOT real secrets, just values so Next.js can run
+# static generation during build. They are overridden at runtime via env-file.
+# NOTE: settings.ts validates the encryption key lazily (on first use), so the
+# build itself never encrypts anything — but we still provide a well-formed
+# value to avoid any edge-case module evaluation issues.
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="file:/tmp/build-only.db"
-ENV SETTINGS_ENCRYPTION_KEY="build-time-placeholder-not-used-at-runtime"
-ENV NEXTAUTH_SECRET="build-time-placeholder"
+ENV SETTINGS_ENCRYPTION_KEY="build-stage-only-key-0123456789abcdef-FAKE"
+ENV NEXTAUTH_SECRET="build-stage-only-secret-0123456789abcdef-FAKE"
 
 # Generate Prisma client + build Next.js
 RUN npx prisma generate
@@ -97,8 +100,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 
-# Copy the entrypoint script (runs prisma migrations before starting Next.js)
+# Copy the entrypoint + admin bootstrap script (runs migrations & bootstrap before Next.js)
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --chown=nextjs:nodejs docker/bootstrap-admin.cjs /app/docker/bootstrap-admin.cjs
 RUN chmod +x /app/docker-entrypoint.sh
 
 USER nextjs

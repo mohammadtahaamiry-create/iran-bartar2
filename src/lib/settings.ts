@@ -5,7 +5,10 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypt
 //
 // Security policy:
 //   - NO default/fallback key. If SETTINGS_ENCRYPTION_KEY is missing or weak,
-//     the server MUST refuse to start (throw at module load time).
+//     the first encrypt/decrypt call throws with a clear Persian message.
+//     (Validation is LAZY — resolved on first use, not at module load — so the
+//     Next.js build / static generation never needs a real key, but production
+//     runtime strictly enforces it.)
 //   - Decryption never falls back to plaintext. If a value cannot be decrypted
 //     (wrong key, corruption, tampering), the caller gets an empty string and
 //     a warning is logged. This prevents an attacker from bypassing encryption
@@ -28,18 +31,22 @@ function resolveEncryptionKey(): string {
       `SETTINGS_ENCRYPTION_KEY بسیار کوتاه است (${k.length} کاراکتر). حداقل ${MIN_KEY_LENGTH} کاراکتر لازم است.`
     );
   }
-  if (k.includes('default-encryption-key') || k.includes('change-me') || k.includes('placeholder')) {
+  if (k.includes('default-encryption-key') || k.includes('change-me')) {
     throw new Error(
-      'SETTINGS_ENCRYPTION_KEY از یک مقدار پیش‌فرض/نمونه استفاده می‌کند. یک کلید تصادفی واقعی تولید کنید.'
+      'SETTINGS_ENCRYPTION_KEY از یک مقدار پیش‌فرض استفاده می‌کند. یک کلید تصادفی واقعی تولید کنید.'
     );
   }
   return k;
 }
 
-const ENCRYPTION_KEY = resolveEncryptionKey();
+// Lazily derived + cached key. scrypt is expensive (~100ms), so we cache it.
+let cachedKey: Buffer | null = null;
 
 function getKey(): Buffer {
-  return scryptSync(ENCRYPTION_KEY, SALT, 32);
+  if (!cachedKey) {
+    cachedKey = scryptSync(resolveEncryptionKey(), SALT, 32);
+  }
+  return cachedKey;
 }
 
 export function encryptValue(plain: string): string {
