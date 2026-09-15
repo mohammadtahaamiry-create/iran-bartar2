@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     const token = createSessionToken();
-    saveSession(user.id, token);
+    await saveSession(user.id, token);
 
     const response = NextResponse.json({
       user: {
@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 7,
+      // secure: true,  // enable when behind HTTPS reverse proxy in production
     });
     return response;
   } catch (err) {

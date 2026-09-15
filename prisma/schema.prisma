@@ -23,6 +23,7 @@ model User {
 
   chatSessions   ChatSession[]
   contents       Content[]
+  sessions       Session[]
 }
 
 model ChatSession {
@@ -81,4 +82,20 @@ model Setting {
   updatedById String?
 
   @@index([category])
+}
+
+/// Persistent user sessions (replaces the previous in-memory session map).
+/// Survives container restarts, rebuilds, and `docker compose down && up`.
+/// A session token is a 64-char hex random string; the DB row maps it to a user.
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

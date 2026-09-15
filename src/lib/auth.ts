@@ -3,12 +3,13 @@ import { db } from '@/lib/db';
 import { randomBytes, createHash } from 'crypto';
 
 export const SESSION_COOKIE = 'iran_behtar_session';
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
-// Hash a password using PBKDF2-like salted SHA-256
+// ---- Password hashing (PBKDF2-like salted SHA-256, 1000 rounds) ----
+
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString('hex');
   const hash = createHash('sha256').update(salt + ':' + password).digest('hex');
-  // 1000 rounds
   let final = hash;
   for (let i = 0; i < 999; i++) {
     final = createHash('sha256').update(final).digest('hex');
@@ -23,61 +24,79 @@ export function verifyPassword(password: string, stored: string): boolean {
   for (let i = 0; i < 999; i++) {
     final = createHash('sha256').update(final).digest('hex');
   }
-  return final === hash;
+  // Constant-time comparison to prevent timing attacks.
+  if (final.length !== hash.length) return false;
+  let diff = 0;
+  for (let i = 0; i < final.length; i++) {
+    diff |= final.charCodeAt(i) ^ hash.charCodeAt(i);
+  }
+  return diff === 0;
 }
 
-// Simple session token: random hex string
+// ---- Session token ----
+
 export function createSessionToken(): string {
   return randomBytes(32).toString('hex');
 }
 
-// Session store using in-memory map (persists across hot reloads via global)
-type SessionData = { userId: string; token: string; createdAt: number };
+// ---- DB-backed session store ----
+//
+// Sessions are persisted in the SQLite database (Session model) so that:
+//   - Container restarts / rebuilds / `docker compose down && up` do NOT log
+//     users out.
+//   - Multiple replicas (future) share the same session state.
+//   - We can audit / revoke sessions from the admin panel.
+//
+// Each session has an `expiresAt` field. Expired sessions are lazily cleaned up
+// on read; a periodic cleanup can be added later.
 
-const sessionStore = globalThis as unknown as {
-  __iran_behtar_sessions?: Map<string, SessionData>;
-};
-
-if (!sessionStore.__iran_behtar_sessions) {
-  sessionStore.__iran_behtar_sessions = new Map();
-}
-
-const SESSION_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
-
-export function saveSession(userId: string, token: string) {
-  sessionStore.__iran_behtar_sessions!.set(token, {
-    userId,
-    token,
-    createdAt: Date.now(),
+export async function saveSession(userId: string, token: string): Promise<void> {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+  await db.session.create({
+    data: { token, userId, createdAt: now, expiresAt },
   });
-  // Cleanup expired
-  for (const [k, v] of sessionStore.__iran_behtar_sessions!.entries()) {
-    if (Date.now() - v.createdAt > SESSION_TTL) {
-      sessionStore.__iran_behtar_sessions!.delete(k);
-    }
+  // Opportunistic cleanup: delete expired sessions for this user (cheap, bounded).
+  try {
+    await db.session.deleteMany({
+      where: { userId, expiresAt: { lt: now } },
+    });
+  } catch {
+    // non-fatal
   }
 }
 
-export function getSession(token?: string): SessionData | null {
+export async function getSession(token: string | undefined): Promise<{ userId: string } | null> {
   if (!token) return null;
-  const data = sessionStore.__iran_behtar_sessions!.get(token);
-  if (!data) return null;
-  if (Date.now() - data.createdAt > SESSION_TTL) {
-    sessionStore.__iran_behtar_sessions!.delete(token);
+  const row = await db.session.findUnique({ where: { token } });
+  if (!row) return null;
+  if (row.expiresAt.getTime() < Date.now()) {
+    // Expired — delete and report as not-found.
+    try {
+      await db.session.delete({ where: { id: row.id } });
+    } catch {
+      // non-fatal
+    }
     return null;
   }
-  return data;
+  return { userId: row.userId };
 }
 
-export function destroySession(token?: string) {
+export async function destroySession(token: string | undefined): Promise<void> {
   if (!token) return;
-  sessionStore.__iran_behtar_sessions!.delete(token);
+  try {
+    await db.session.deleteMany({ where: { token } });
+  } catch {
+    // non-fatal
+  }
 }
+
+// ---- Current user helper ----
 
 export async function getCurrentUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
-  const session = getSession(token);
+  const session = await getSession(token);
   if (!session) return null;
   const user = await db.user.findUnique({
     where: { id: session.userId },

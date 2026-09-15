@@ -2,9 +2,41 @@ import { db } from '@/lib/db';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 
 // ---- Encryption helpers for sensitive values (API keys, tokens) ----
+//
+// Security policy:
+//   - NO default/fallback key. If SETTINGS_ENCRYPTION_KEY is missing or weak,
+//     the server MUST refuse to start (throw at module load time).
+//   - Decryption never falls back to plaintext. If a value cannot be decrypted
+//     (wrong key, corruption, tampering), the caller gets an empty string and
+//     a warning is logged. This prevents an attacker from bypassing encryption
+//     by corrupting stored ciphertext.
 
-const ENCRYPTION_KEY = process.env.SETTINGS_ENCRYPTION_KEY || 'iran-behtar-default-encryption-key-v1';
 const SALT = 'iran-behtar-settings-salt';
+const MIN_KEY_LENGTH = 32;
+
+function resolveEncryptionKey(): string {
+  const k = process.env.SETTINGS_ENCRYPTION_KEY;
+  if (!k) {
+    throw new Error(
+      'SETTINGS_ENCRYPTION_KEY تنظیم نشده است. این کلید برای رمزنگاری API keys ضروری است. ' +
+      'یک رشته‌ی تصادفی حداقل ۳۲ کاراکتری بسازید (مثلاً: openssl rand -base64 48) ' +
+      'و آن را در فایل .env.production قرار دهید.'
+    );
+  }
+  if (k.length < MIN_KEY_LENGTH) {
+    throw new Error(
+      `SETTINGS_ENCRYPTION_KEY بسیار کوتاه است (${k.length} کاراکتر). حداقل ${MIN_KEY_LENGTH} کاراکتر لازم است.`
+    );
+  }
+  if (k.includes('default-encryption-key') || k.includes('change-me') || k.includes('placeholder')) {
+    throw new Error(
+      'SETTINGS_ENCRYPTION_KEY از یک مقدار پیش‌فرض/نمونه استفاده می‌کند. یک کلید تصادفی واقعی تولید کنید.'
+    );
+  }
+  return k;
+}
+
+const ENCRYPTION_KEY = resolveEncryptionKey();
 
 function getKey(): Buffer {
   return scryptSync(ENCRYPTION_KEY, SALT, 32);
@@ -21,7 +53,13 @@ export function encryptValue(plain: string): string {
 
 export function decryptValue(stored: string): string {
   const parts = stored.split(':');
-  if (parts.length !== 3) return stored; // assume plain if not encrypted format
+  // If not in encrypted format, return empty string (DO NOT return the plaintext).
+  // This prevents an attacker from bypassing encryption by storing plaintext values
+  // directly in the DB (e.g., via SQL injection or manual DB access).
+  if (parts.length !== 3) {
+    console.warn('[security] refusing to return non-encrypted value as plaintext (length=' + stored.length + ')');
+    return '';
+  }
   const [ivHex, tagHex, encHex] = parts;
   try {
     const iv = Buffer.from(ivHex, 'hex');
@@ -31,8 +69,11 @@ export function decryptValue(stored: string): string {
     decipher.setAuthTag(tag);
     const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
     return dec.toString('utf8');
-  } catch {
-    return stored; // fallback to plain
+  } catch (err) {
+    // Decryption failed (wrong key, tampering, or corruption).
+    // Return empty string — NEVER fall back to the raw stored value.
+    console.error('[security] decryption failed; returning empty string. Error:', (err as Error).message);
+    return '';
   }
 }
 
